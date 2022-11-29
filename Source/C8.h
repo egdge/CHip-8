@@ -8,32 +8,10 @@
 typedef unsigned char BYTE;     //8 bits
 typedef unsigned short int WORD;//16 bits
 
-/*
-void performopcode(WORD opcode){
-    switch (opcode & 0xF000)
-    {
-    case (0x0000):
-        switch (opcode & 0x0FFF)
-        {
-        case 0x00EE:
-            o_cls();
-            break;
 
-        case 0x000E:
-            o_ret();
-            break;
-
-        default:
-            jmp();
-            break;
-        }
-        break;
-
-    default:
-        break;
-    }
-}
-*/
+void performopcode(WORD opcode, BYTE memory[0xFFF], BYTE register[0xF], bool display[64][32], unsigned int *delay_timer, unsigned int sound_timer, WORD stack[16], WORD *PC, WORD *SP);
 
 
-#endif C8_H_
+
+
+#endif

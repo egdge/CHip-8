@@ -15,7 +15,7 @@ WORD r_AddressI;
 
 //'Pseudo' Registers
 WORD PC;                    //The 16 bit Program Counter
-BYTE SP;                    //The 8 bit Stack Pointer
+BYTE SP = -1;               //The 8 bit Stack Pointer
 
 //Screen
 bool display[64][32];
@@ -82,8 +82,6 @@ int main(int argc, char **argv){
         puts("Supply a CHIP-8 ROM");
         return 0;
     }
-    
-
     #pragma endregion
 
     FILE *ROM = NULL;
@@ -95,7 +93,7 @@ int main(int argc, char **argv){
 
 
     //Get file size
-    fseek(ROM, 0, SEEK_END);
+    fseek(ROM, 0L, SEEK_END);
     unsigned int sz = ftell(ROM);
     rewind(ROM);
     
@@ -109,7 +107,12 @@ int main(int argc, char **argv){
     //Check if fill size is within the limit
     #pragma endregion
 
-    
+    bool play = 1;
+
+    while(play){
+        WORD CurrentOpcode = getopcode();
+
+    }
 
     
     return 0;
