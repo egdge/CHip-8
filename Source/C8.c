@@ -1,6 +1,18 @@
 #include "C8.h"
+#include <stdlib.h>
 
-void PerformOpcode(WORD opcode, BYTE memory[0xFFF], BYTE mregister[0xF], bool display[64][32], unsigned int *delay_timer, unsigned int *sound_timer, WORD stack[16], WORD *PC, WORD *SP){
+
+void PerformOpcode( WORD opcode, 
+                    BYTE memory[0xFFF], 
+                    BYTE mregister[0xF], 
+                    WORD* AddressI, 
+                    bool display[64][32], 
+                    unsigned int *delay_timer, 
+                    unsigned int *sound_timer, 
+                    WORD stack[16], 
+                    WORD *PC, 
+                    WORD *SP)
+{
     
     switch (opcode & 0xFFFF)
     {
@@ -61,71 +73,105 @@ void PerformOpcode(WORD opcode, BYTE memory[0xFFF], BYTE mregister[0xF], bool di
         mregister[(opcode & 0x0F00)>>8] = (opcode & 0x00FF);
         break;
 
-    case (0x7000):
+    case (0x7000)://Add V[x] to the bottom 2 bytes
         mregister[(opcode & 0x0F00)>>8] += (opcode & 0x00FF);
         break;
     
     case (0x8000):
-        switch (opcode & 0x000F)
-        {
-
-        case 0x0000:
+        switch (opcode & 0x000F){
+        case 0x0000://Set V[x] as V[y]
             mregister[(opcode & 0x0F00)>>8] = mregister[(opcode & 0x00F0)>>4];
             break;
 
-        case 0x0001:
+        case 0x0001://Set V[x] = V[x] OR V[y]
             mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) | (mregister[(opcode & 0x00F0)>>4]));
             break;
         
-        case 0x0002:
+        case 0x0002://Set V[x] = V[x] AND V[y]
             mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) & (mregister[(opcode & 0x00F0)>>4]));
             break;
 
-        case 0x0003:
+        case 0x0003://Set V[x] = V[x] XOR V[y]
             mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) ^ (mregister[(opcode & 0x00F0)>>4]));
             break;
 
-        case 0x0004:
-            BYTE temp = mregister[(opcode & 0x0F00)>>8];
+        case 0x0004://Set Vx = Vx + Vy, set VF = carry
             mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) + (mregister[(opcode & 0x00F0)>>4]));
-            bool mregister[0xE] = mregister[(opcode & 0x0F00)>>8] < temp;
+            if(mregister[(opcode & 0x00F0) >> 4] > (0xFF - mregister[(opcode & 0x0F00) >> 8])){
+                        mregister[0xF] = 1; //carry
+                    }
+                    else{
+                        mregister[0xF] = 0;
+                    }
             break;
 
-        case 0x0005:
-            /* code */
+        case 0x0005://Set Vx = Vx - Vy, set VF = NOT borrow  
+            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) - (mregister[(opcode & 0x00F0)>>4]));
+            if(mregister[(opcode & 0x0F00) >> 8] > (mregister[(opcode & 0x00F0)>>4])){
+                        mregister[0xF] = 1; //Not borrow
+                    }
+                    else{
+                        mregister[0xF] = 0;
+                    }
             break;
 
-        case 0x0006:
-            /* code */
+        case 0x0006://Set Vx = Vx SHR 1
+            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) >>1);
+            if((mregister[(opcode & 0x0F00) >> 8] & 0x0001) == 1){
+                        mregister[0xF] = 1;//least-significant bit of Vx is 1
+                    }
+                    else{
+                        mregister[0xF] = 0;
+                    }
             break;
 
-        case 0x0007:
-            /* code */
+        case 0x0007://Set Vx = Vy - Vx, set VF = NOT borrow
+            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x00F0)>>4]) - (mregister[(opcode & 0x0F00)>>8]));
+            if(mregister[(opcode & 0x00F0) >> 4] > (mregister[(opcode & 0x0F00) >> 8])){
+                        mregister[0xF] = 1; //Not borrow
+                    }
+                    else{
+                        mregister[0xF] = 0;
+                    }
             break;
 
-        case 0x000E:
-            /* code */
+        case 0x000E://Set Vx = Vx SHL 1
+            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) << 1);
+            if((mregister[(opcode & 0x0F00) >> 8] & 0x8000) == 0x8000){
+                        mregister[0xF] = 1;//most-significant bit of Vx is 1
+                    }
+                    else{
+                        mregister[0xF] = 0;
+                    }
             break;
 
-        default:
+        default://Error case
             puts("Invalid Opcode");
             break;
         }
         break;
     
-    case (0x9000):
+    case (0x9000)://Skip next instruction if Vx != Vy
+        if( mregister[(opcode & 0x0F00)>>8] != mregister[(opcode & 0x00F0)>>4] ){
+                *PC = (*PC) + 2;
+        }
         break;
 
-    case (0xA000):
+    case (0xA000)://Set I = nnn
+        *AddressI = (opcode & 0x0FFF);
         break;
 
-    case (0xB000):
+    case (0xB000)://Jump to location nnn + V0
+        *PC = (opcode & 0x0FFF);
         break;
 
     case (0xC000):
+        mregister[(opcode & 0x0F00)>>8] = ((rand() % (0xFF + 1)) & (opcode & 0x00FF));
         break;
 
-    case (0xD000):
+    case (0xD000):{
+            
+        }
         break;
 
     case (0xE000):
