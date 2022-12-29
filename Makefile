@@ -1,5 +1,5 @@
 #OBJS specifies which files to compile as part of the project
-OBJS = Source/main.c Source/C8.c
+OBJS = Source/main.c Source/C8.c Source/DisTim.c Source/Input.c
 
 #CC specifies which compiler we're using
 CC = gcc
@@ -17,8 +17,10 @@ OBJ_NAME = chip8emu
 OBJ_NAME_DEBUG = chip8emugdb
 
 #This is the target that compiles our executable
-all : $(OBJS) $(DEPS)
+all : $(OBJS)
 	$(CC) $(OBJS) $(COMPILER_FLAGS) $(LINKER_FLAGS) -o $(OBJ_NAME)
 
-gdb : $(OBJS) $(DEPS)
+gdb : $(OBJS)
 	$(CC) $(OBJS) $(COMPILER_FLAGS) -g $(LINKER_FLAGS) -o $(OBJ_NAME_DEBUG)
+sdl_test : SDL_Test.c
+	$(CC) SDL_Test.c $(COMPILER_FLAGS) -g $(LINKER_FLAGS) -o sdl_test

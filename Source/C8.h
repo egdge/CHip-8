@@ -1,26 +1,27 @@
-#ifndef C8_H_
-#define C8_H_
+#ifndef C8_H
+#define C8_H
+
 
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>            //C is retarded
+#include "defs.h"
+#include "C8_struct.h"
 
+WORD getX(WORD opc);
 
-typedef unsigned char BYTE;     //8 bits
-typedef unsigned short int WORD;//16 bits
+WORD getY(WORD opc);
 
+WORD getN(WORD opc);
 
-void performopcode(WORD opcode, 
-                    BYTE memory[0xFFF], 
-                    BYTE register[0xF], 
-                    WORD* AddressI, 
-                    bool display[64][32], 
-                    unsigned int *delay_timer, 
-                    unsigned int sound_timer, 
-                    WORD stack[16], 
-                    WORD *PC, 
-                    WORD *SP);
+WORD getNNN(WORD opc);
 
+void PerformOpcode( WORD opcode, 
+                    CPU *CPUC8);
 
+bool CPUINIT(CPU *C8CPU, FILE *in, char* f_game);
+
+WORD getopcode(CPU *CPU8);
 
 
 #endif

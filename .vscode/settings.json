@@ -2,6 +2,23 @@
     "files.associations": {
         "stdio.h": "c",
         "c8.h": "c",
-        "stdbool.h": "c"
-    }
+        "stdbool.h": "c",
+        "sdl.h": "c",
+        "input.h": "c",
+        "numbers": "c",
+        "array": "c",
+        "memory": "c",
+        "functional": "c",
+        "tuple": "c",
+        "utility": "c",
+        "string.h": "c",
+        "_sdl_stuff.h": "c"
+    },
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/media/cruz/DATA/Chip-8 Emu",
+            "binaryPath": "/media/cruz/DATA/Chip-8 Emu/chip8emu",
+            "binaryArgs": []
+        }
+    ]
 }

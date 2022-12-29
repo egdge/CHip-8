@@ -1,186 +1,359 @@
 #include "C8.h"
+#include "C8_struct.h"
+#include "DisTim.h"
+#include "Input.h"
+#include "defs.h"
+#include <string.h>
 #include <stdlib.h>
+
+#define R_VALUE 0x00
+#define G_VALUE 0xCC
+#define B_VALUE 0x66 
+
+WORD getX(WORD opc){
+    return ((opc & 0x0F00) >> 8);
+}
+
+WORD getY(WORD opc){
+    return ((opc & 0x00F0) >> 4);
+}
+
+WORD getN(WORD opc){
+    return (opc & 0x000F);
+}
+
+WORD getNNN(WORD opc){
+    return (opc & 0x0FFF);
+}
+
+WORD getKK(WORD opc){
+    return (opc & 0x00FF);
+}
+
+BYTE C8_font[] = 
+{
+    0xF0, 0x90, 0x90, 0x90, 0xF0,		// 0
+	0x20, 0x60, 0x20, 0x20, 0x70,		// 1
+	0xF0, 0x10, 0xF0, 0x80, 0xF0,		// 2
+	0xF0, 0x10, 0xF0, 0x10, 0xF0,		// 3
+	0x90, 0x90, 0xF0, 0x10, 0x10,		// 4
+	0xF0, 0x80, 0xF0, 0x10, 0xF0,		// 5
+	0xF0, 0x80, 0xF0, 0x90, 0xF0,		// 6
+	0xF0, 0x10, 0x20, 0x40, 0x40,		// 7
+	0xF0, 0x90, 0xF0, 0x90, 0xF0,		// 8
+	0xF0, 0x90, 0xF0, 0x10, 0xF0,		// 9
+	0xF0, 0x90, 0xF0, 0x90, 0x90,		// A
+	0xE0, 0x90, 0xE0, 0x90, 0xE0,		// B
+	0xF0, 0x80, 0x80, 0x80, 0xF0,		// C
+	0xE0, 0x90, 0x90, 0x90, 0xE0,		// D
+	0xF0, 0x80, 0xF0, 0x80, 0xF0,		// E
+	0xF0, 0x80, 0xF0, 0x80, 0x80		// F
+};
+
+//Initializing the CPU
+bool CPUINIT(CPU *C8CPU,FILE *in, char* f_game){
+    C8CPU->r_AddressI=0;
+    C8CPU->PC=0x200;
+    C8CPU->SP = -1;
+    
+    
+    memset(C8CPU->r_Registers,0, sizeof(C8CPU->r_Registers) / sizeof(BYTE));
+    memset(C8CPU->m_Memory,0, sizeof(C8CPU->m_Memory)/sizeof(BYTE));
+    memset(C8CPU->display,0, sizeof(C8CPU->display)/sizeof(BYTE));
+    memset(C8CPU->truedisplay,0, sizeof(C8CPU->truedisplay)/sizeof(D_WORD));
+
+    for(int i = 0;i<80;i++){
+        C8CPU->m_Memory[i]=C8_font[i];
+    }
+    
+
+    //Loading the file
+    in = fopen( f_game, "rb" );
+
+    //checking if the file pointer is null
+    if(NULL == in){
+        puts("File pinter is null");
+        return 0;
+    }
+
+    fread( ((C8CPU->m_Memory)+0x200), 0xfff, 1, in);
+
+    return 1;
+}
+
+//Get opcode
+WORD getopcode(CPU *C8CPU){
+    WORD res = 0 ;
+    res = C8CPU->m_Memory[C8CPU->PC] ; //Get
+    res <<= 8 ; 
+    res |= C8CPU->m_Memory[(C8CPU->PC)+1] ; 
+    return res ;
+}
 
 
 void PerformOpcode( WORD opcode, 
-                    BYTE memory[0xFFF], 
-                    BYTE mregister[0xF], 
-                    WORD* AddressI, 
-                    bool display[64][32], 
-                    unsigned int *delay_timer, 
-                    unsigned int *sound_timer, 
-                    WORD stack[16], 
-                    WORD *PC, 
-                    WORD *SP)
-{
-    
-    switch (opcode & 0xFFFF)
+                    CPU *CPUC8){
+    WORD X = getX(opcode);
+    WORD Y= getY(opcode);
+    WORD N = getN(opcode);
+    WORD NNN = getNNN(opcode);
+    WORD KK = getKK(opcode);
+    switch (opcode & 0xF000)
     {
     case (0x0000)://JMP, Clear Screen, Return Subroutine
         switch (opcode & 0x0FFF)
         {
         case 0x00EE: //Unconditional Jump
-            *PC = stack[*SP];
-            --(*SP);
+            CPUC8->PC = CPUC8->stack[CPUC8->SP];
+            --(CPUC8->SP);
             break;
 
         case 0x00E0: //Clear the screen
-            for (int i = 0; i < 64; i++)
-            {
-                for (size_t j = 0; j < 32; j++)
-                {
-                    display[1][j] = 0;
-                }
-                
-            }
+            memset(CPUC8->truedisplay,0, sizeof(CPUC8->truedisplay)/sizeof(D_WORD));
+            CPUC8->draw = 1;
             break;
 
         default: //Uncodtional Jump
-            *PC = (opcode & 0x0FFF);
+            CPUC8->PC = NNN;
             break;
         }
         break;
 
     case (0x1000)://JMP
-        *PC = (opcode & 0x0FFF);
+        CPUC8->PC = NNN;
         break;
     
     case (0x2000)://Call subroutine
-        ++(*SP);
-        stack[*SP] = *SP;
-        *PC = (opcode & 0x0FFF);
+        ++(CPUC8->SP);
+        CPUC8->stack[CPUC8->SP] = CPUC8->PC;
+        CPUC8->PC = NNN;
         break;
     
     case (0x3000)://Skip next instruction if V[x] == lower byte
-        if( mregister[(opcode & 0x0F00)>>8] == (opcode & 0x00FF) ){
-                *PC = (*PC) + 2;
+        if( CPUC8->r_Registers[X] == (KK) ){
+                CPUC8->PC = (CPUC8->PC) + 2;
         }
         break;
     
     case (0x4000)://Skip next instruction if V[x] != lower byte
-        if( mregister[(opcode & 0x0F00)>>8] != (opcode & 0x00FF) ){
-                *PC = (*PC) + 2;
+        if( CPUC8->r_Registers[X] != (KK) ){
+                CPUC8->PC = (CPUC8->PC) + 2;
         }
         break;
-    
     case (0x5000)://Skip next instruction if V[x]=V[y]
-        if( mregister[(opcode & 0x0F00)>>8] == mregister[(opcode & 0x00F0)>>4] ){
-                *PC = (*PC) + 2;
+        if( CPUC8->r_Registers[X] == CPUC8->r_Registers[Y] ){
+                CPUC8->PC = (CPUC8->PC) + 2;
         }
         break;
     
     case (0x6000)://Places bottom byte in V[x]
-        mregister[(opcode & 0x0F00)>>8] = (opcode & 0x00FF);
+        CPUC8->r_Registers[X] = (KK);
         break;
 
     case (0x7000)://Add V[x] to the bottom 2 bytes
-        mregister[(opcode & 0x0F00)>>8] += (opcode & 0x00FF);
+        CPUC8->r_Registers[X] += (KK);
         break;
     
-    case (0x8000):
-        switch (opcode & 0x000F){
-        case 0x0000://Set V[x] as V[y]
-            mregister[(opcode & 0x0F00)>>8] = mregister[(opcode & 0x00F0)>>4];
-            break;
+    case (0x8000)://
+            switch (opcode & 0x000F){
+                case 0x0000://Set V[x] as V[y]
+                    CPUC8->r_Registers[X] = CPUC8->r_Registers[Y];
+                    break;
 
-        case 0x0001://Set V[x] = V[x] OR V[y]
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) | (mregister[(opcode & 0x00F0)>>4]));
-            break;
-        
-        case 0x0002://Set V[x] = V[x] AND V[y]
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) & (mregister[(opcode & 0x00F0)>>4]));
-            break;
+                case 0x0001://Set V[x] = V[x] OR V[y]
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) | (CPUC8->r_Registers[Y]));
+                    break;
+                
+                case 0x0002://Set V[x] = V[x] AND V[y]
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) & (CPUC8->r_Registers[Y]));
+                    break;
 
-        case 0x0003://Set V[x] = V[x] XOR V[y]
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) ^ (mregister[(opcode & 0x00F0)>>4]));
-            break;
+                case 0x0003://Set V[x] = V[x] XOR V[y]
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) ^ (CPUC8->r_Registers[Y]));
+                    break;
 
-        case 0x0004://Set Vx = Vx + Vy, set VF = carry
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) + (mregister[(opcode & 0x00F0)>>4]));
-            if(mregister[(opcode & 0x00F0) >> 4] > (0xFF - mregister[(opcode & 0x0F00) >> 8])){
-                        mregister[0xF] = 1; //carry
+                case 0x0004://Set Vx = Vx + Vy, set VF = carry
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) + (CPUC8->r_Registers[Y]));
+
+                    if(CPUC8->r_Registers[(opcode & 0x00F0) >> 4] > (0xFF - CPUC8->r_Registers[(opcode & 0x0F00) >> 8])){
+                        CPUC8->r_Registers[0xF] = 1; //carry
                     }
                     else{
-                        mregister[0xF] = 0;
+                        CPUC8->r_Registers[0xF] = 0;
                     }
-            break;
+                    break;
 
-        case 0x0005://Set Vx = Vx - Vy, set VF = NOT borrow  
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) - (mregister[(opcode & 0x00F0)>>4]));
-            if(mregister[(opcode & 0x0F00) >> 8] > (mregister[(opcode & 0x00F0)>>4])){
-                        mregister[0xF] = 1; //Not borrow
+                case 0x0005://Set Vx = Vx - Vy, set VF = NOT borrow  
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) - (CPUC8->r_Registers[Y]));
+
+                    if(CPUC8->r_Registers[(opcode & 0x0F00) >> 8] > (CPUC8->r_Registers[Y])){
+                        CPUC8->r_Registers[0xF] = 1; //Not borrow
                     }
                     else{
-                        mregister[0xF] = 0;
+                        CPUC8->r_Registers[0xF] = 0;
                     }
-            break;
+                    break;
 
-        case 0x0006://Set Vx = Vx SHR 1
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) >>1);
-            if((mregister[(opcode & 0x0F00) >> 8] & 0x0001) == 1){
-                        mregister[0xF] = 1;//least-significant bit of Vx is 1
+                case 0x0006://Set Vx = Vx SHR 1
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) >>1);
+
+                    if((CPUC8->r_Registers[(opcode & 0x0F00) >> 8] & 0x0001) == 1){
+                        CPUC8->r_Registers[0xF] = 1;//least-significant bit of Vx is 1
                     }
                     else{
-                        mregister[0xF] = 0;
+                        CPUC8->r_Registers[0xF] = 0;
                     }
-            break;
+                    break;
 
-        case 0x0007://Set Vx = Vy - Vx, set VF = NOT borrow
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x00F0)>>4]) - (mregister[(opcode & 0x0F00)>>8]));
-            if(mregister[(opcode & 0x00F0) >> 4] > (mregister[(opcode & 0x0F00) >> 8])){
-                        mregister[0xF] = 1; //Not borrow
+                case 0x0007://Set Vx = Vy - Vx, set VF = NOT borrow
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[Y]) - (CPUC8->r_Registers[X]));
+
+                    if(CPUC8->r_Registers[(opcode & 0x00F0) >> 4] > (CPUC8->r_Registers[(opcode & 0x0F00) >> 8])){
+                        CPUC8->r_Registers[0xF] = 1; //Not borrow
                     }
                     else{
-                        mregister[0xF] = 0;
+                        CPUC8->r_Registers[0xF] = 0;
                     }
-            break;
+                    break;
 
-        case 0x000E://Set Vx = Vx SHL 1
-            mregister[(opcode & 0x0F00)>>8] = ((mregister[(opcode & 0x0F00)>>8]) << 1);
-            if((mregister[(opcode & 0x0F00) >> 8] & 0x8000) == 0x8000){
-                        mregister[0xF] = 1;//most-significant bit of Vx is 1
+                case 0x000E://Set Vx = Vx SHL 1
+                    CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) << 1);
+
+                    if((CPUC8->r_Registers[(opcode & 0x0F00) >> 8] & 0x8000) == 0x8000){
+                        CPUC8->r_Registers[0xF] = 1;//most-significant bit of Vx is 1
                     }
                     else{
-                        mregister[0xF] = 0;
+                        CPUC8->r_Registers[0xF] = 0;//most-significant bit of Vx is 0
                     }
-            break;
+                    break;
 
-        default://Error case
-            puts("Invalid Opcode");
-            break;
-        }
+                default://Error case
+                    puts("Invalid Opcode 1");
+                    break;
+            }
         break;
     
     case (0x9000)://Skip next instruction if Vx != Vy
-        if( mregister[(opcode & 0x0F00)>>8] != mregister[(opcode & 0x00F0)>>4] ){
-                *PC = (*PC) + 2;
+        if( CPUC8->r_Registers[X] != CPUC8->r_Registers[Y] ){
+            CPUC8->PC = (CPUC8->PC) + 2;
         }
         break;
 
     case (0xA000)://Set I = nnn
-        *AddressI = (opcode & 0x0FFF);
+        CPUC8->r_AddressI = NNN;
         break;
 
     case (0xB000)://Jump to location nnn + V0
-        *PC = (opcode & 0x0FFF);
+        CPUC8->PC = NNN;
         break;
 
     case (0xC000):
-        mregister[(opcode & 0x0F00)>>8] = ((rand() % (0xFF + 1)) & (opcode & 0x00FF));
+        CPUC8->r_Registers[X] = ((rand() % (0xFF + 1)) & (KK));
         break;
 
-    case (0xD000):{
-            
-        }
+    case (0xD000):
+        CPUC8->r_Registers[0xF] = 0;
+        BYTE height = N;
+        BYTE pixel;
+
+        for (int yline = 0; yline < height; yline++)
+            {
+                pixel = CPUC8->m_Memory[(CPUC8->r_AddressI) + yline];
+                for(int xline = 0; xline < 8; xline++)
+                {
+                    if((pixel & (0x80 >> xline)) != 0)
+                    {
+                        if(CPUC8->display[(X + xline + ((Y + yline) * 64))] == 1)
+                        {
+                            CPUC8->r_Registers[0xF] = 1;
+                        }
+                        CPUC8->display[X + xline + ((Y + yline) * 64)] ^= 1;
+                    }
+                }
+            }
+        
+
+
+        CPUC8->draw = 1;
         break;
 
     case (0xE000):
+        switch (opcode & 0x00FF)
+        {
+        case 0x009E:
+            if(CPUC8->Key[X]){
+                CPUC8->PC = CPUC8->PC + 2;
+            } 
+            break;
+            
+        case 0x00A1:
+            if(CPUC8->Key[X]){
+                CPUC8->PC = CPUC8->PC + 2;
+            }
+            break;
+
+        default:
+            printf("Invalid Opcode 3");
+            break;
+        }
         break;
 
     case (0xF000):
+        switch (opcode & 0x00FF){
+        case 0x0007:
+            CPUC8->r_Registers[X] = CPUC8->delay_timer;
+            break;
+        
+        case 0x000A:
+            C8_waitInput(CPUC8);
+            break;
+        
+        case 0x0015:
+            CPUC8->delay_timer = CPUC8->r_Registers[X];
+            break;
+        
+        case 0x0018:
+            CPUC8->sound_timer = CPUC8->r_Registers[X];
+            break;
+        
+        case 0x001E:
+            CPUC8->r_AddressI = CPUC8->r_AddressI + CPUC8->r_Registers[X];
+            break;
+
+        case 0x0029:
+            CPUC8->r_AddressI = (X * 5);
+            break;
+
+        case 0x0033:
+            CPUC8->m_Memory[CPUC8->r_AddressI] = (CPUC8->r_Registers[X]/100);
+            CPUC8->m_Memory[CPUC8->r_AddressI] = (CPUC8->r_Registers[X]/10)%10;
+            CPUC8->m_Memory[CPUC8->r_AddressI] = (CPUC8->r_Registers[X]%10);
+            break;
+
+        case 0x0055:
+            for(int i = 0 ; i < 0x10; i++){
+                CPUC8->m_Memory[(CPUC8->r_AddressI) + i] = CPUC8->r_Registers[i];
+            }
+            break;
+
+        case 0x0065:
+            for(int i = 0 ; i < 0x10; i++){
+                CPUC8->r_Registers[i] = CPUC8->m_Memory[(CPUC8->r_AddressI) + i];
+            }
+            break;
+
+        default:
+            break;
+        }
         break;
 
+    
     default:
+        printf(" %X Invalid Opcode 4\n", opcode);
         break;
     }
+
+    CPUC8->PC += 2;
 }
+
+
