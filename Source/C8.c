@@ -263,11 +263,11 @@ void PerformOpcode( WORD opcode,
                 {
                     if((pixel & (0x80 >> xline)) != 0)
                     {
-                        if(CPUC8->display[(X + xline + ((Y + yline) * 64))] == 1)
+                        if(CPUC8->display[(CPUC8->r_Registers[X] + xline + ((CPUC8->r_Registers[Y] + yline) * 64))] == 1)
                         {
                             CPUC8->r_Registers[0xF] = 1;
                         }
-                        CPUC8->display[X + xline + ((Y + yline) * 64)] ^= 1;
+                        CPUC8->display[CPUC8->r_Registers[X] + xline + ((CPUC8->r_Registers[Y] + yline) * 64)] ^= 1;
                     }
                 }
             }
