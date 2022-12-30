@@ -3,7 +3,7 @@
 #include "DisTim.h"
 #include "defs.h"
 
-bool init(C8_display* display, int SCREEN_WIDTH, int SCREEN_HEIGHT){
+bool intidisplay(C8_display* display, int SCREEN_WIDTH, int SCREEN_HEIGHT){
     //Initialization flag
     bool success = true;
 
@@ -92,5 +92,12 @@ void DealWithSoundTimer(CPU* cpu){
         cpu->sound_timer = 0;
     }
     
+}
+
+void shutdown(C8_display* display){
+    SDL_DestroyTexture(display->tex);
+    SDL_DestroyRenderer(display->ren);
+    SDL_DestroyWindow(display->win);
+    SDL_Quit();
 }
 

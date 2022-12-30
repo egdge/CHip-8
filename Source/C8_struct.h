@@ -34,6 +34,7 @@ typedef struct{
 
     //Key being pressed
     BYTE Key[16];
+    BYTE close;
 } CPU;
 
 #endif

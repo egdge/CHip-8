@@ -1,7 +1,6 @@
 #include "C8.h"
 #include "C8_struct.h"
 #include "DisTim.h"
-#include "Input.h"
 #include "defs.h"
 #include <string.h>
 #include <stdlib.h>
@@ -54,13 +53,14 @@ BYTE C8_font[] =
 bool CPUINIT(CPU *C8CPU,FILE *in, char* f_game){
     C8CPU->r_AddressI=0;
     C8CPU->PC=0x200;
-    C8CPU->SP = -1;
+    C8CPU->SP = 0;
+    C8CPU->close = 0;
     
     
     memset(C8CPU->r_Registers,0, sizeof(C8CPU->r_Registers) / sizeof(BYTE));
     memset(C8CPU->m_Memory,0, sizeof(C8CPU->m_Memory)/sizeof(BYTE));
     memset(C8CPU->display,0, sizeof(C8CPU->display)/sizeof(BYTE));
-    memset(C8CPU->truedisplay,0, sizeof(C8CPU->truedisplay)/sizeof(D_WORD));
+    memset(C8CPU->truedisplay,0, sizeof(C8CPU->truedisplay)/sizeof(BYTE));
 
     for(int i = 0;i<80;i++){
         C8CPU->m_Memory[i]=C8_font[i];
@@ -98,35 +98,52 @@ void PerformOpcode( WORD opcode,
     WORD N = getN(opcode);
     WORD NNN = getNNN(opcode);
     WORD KK = getKK(opcode);
+    bool pcincf = 0;
+
     switch (opcode & 0xF000)
     {
     case (0x0000)://JMP, Clear Screen, Return Subroutine
         switch (opcode & 0x0FFF)
         {
-        case 0x00EE: //Unconditional Jump
-            CPUC8->PC = CPUC8->stack[CPUC8->SP];
-            --(CPUC8->SP);
+        case 0x00EE: //Return Subroutine
+            CPUC8->PC = CPUC8->stack[(CPUC8->SP) - 1];
+            if(CPUC8->SP == 0){
+                CPUC8->SP = 0xF;
+            }
+            else{
+                --(CPUC8->SP);
+            }
+            pcincf = 1;
             break;
 
         case 0x00E0: //Clear the screen
-            memset(CPUC8->truedisplay,0, sizeof(CPUC8->truedisplay)/sizeof(D_WORD));
+            memset(CPUC8->display,0, sizeof(CPUC8->display)/sizeof(BYTE));
+            memset(CPUC8->truedisplay,0, sizeof(CPUC8->truedisplay)/sizeof(BYTE));
             CPUC8->draw = 1;
             break;
 
         default: //Uncodtional Jump
             CPUC8->PC = NNN;
+            pcincf = 1;
             break;
         }
         break;
 
     case (0x1000)://JMP
         CPUC8->PC = NNN;
+        pcincf = 1;
         break;
     
     case (0x2000)://Call subroutine
-        ++(CPUC8->SP);
-        CPUC8->stack[CPUC8->SP] = CPUC8->PC;
+        CPUC8->stack[CPUC8->SP] = CPUC8->PC + 2;
+        if(CPUC8->SP == 0x10){
+                CPUC8->SP = 0x0;
+            }
+            else{
+                ++(CPUC8->SP);
+            }
         CPUC8->PC = NNN;
+        pcincf = 1;
         break;
     
     case (0x3000)://Skip next instruction if V[x] == lower byte
@@ -151,7 +168,7 @@ void PerformOpcode( WORD opcode,
         break;
 
     case (0x7000)://Add V[x] to the bottom 2 bytes
-        CPUC8->r_Registers[X] += (KK);
+        CPUC8->r_Registers[X] += KK;
         break;
     
     case (0x8000)://
@@ -162,14 +179,17 @@ void PerformOpcode( WORD opcode,
 
                 case 0x0001://Set V[x] = V[x] OR V[y]
                     CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) | (CPUC8->r_Registers[Y]));
+                    CPUC8->r_Registers[0xF] = 0;
                     break;
                 
                 case 0x0002://Set V[x] = V[x] AND V[y]
                     CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) & (CPUC8->r_Registers[Y]));
+                    CPUC8->r_Registers[0xF] = 0;
                     break;
 
                 case 0x0003://Set V[x] = V[x] XOR V[y]
                     CPUC8->r_Registers[X] = ((CPUC8->r_Registers[X]) ^ (CPUC8->r_Registers[Y]));
+                    CPUC8->r_Registers[0xF] = 0;
                     break;
 
                 case 0x0004://Set Vx = Vx + Vy, set VF = carry
@@ -244,7 +264,8 @@ void PerformOpcode( WORD opcode,
         break;
 
     case (0xB000)://Jump to location nnn + V0
-        CPUC8->PC = NNN;
+        CPUC8->PC = NNN + CPUC8->r_Registers[0x0];
+        pcincf = 1;
         break;
 
     case (0xC000):
@@ -255,19 +276,26 @@ void PerformOpcode( WORD opcode,
         CPUC8->r_Registers[0xF] = 0;
         BYTE height = N;
         BYTE pixel;
+        BYTE xpos;
+        BYTE ypos;
+        if (CPUC8->r_Registers[X] > 63){xpos = CPUC8->r_Registers[X]%64;}
+        else {xpos = CPUC8->r_Registers[X];}
+        if (CPUC8->r_Registers[Y] > 31){ypos = CPUC8->r_Registers[Y]%32;}
+        else {ypos = CPUC8->r_Registers[Y];}
+
 
         for (int yline = 0; yline < height; yline++)
             {
                 pixel = CPUC8->m_Memory[(CPUC8->r_AddressI) + yline];
                 for(int xline = 0; xline < 8; xline++)
-                {
+                {   
                     if((pixel & (0x80 >> xline)) != 0)
                     {
-                        if(CPUC8->display[(CPUC8->r_Registers[X] + xline + ((CPUC8->r_Registers[Y] + yline) * 64))] == 1)
+                        if(CPUC8->display[(xpos + xline + ((ypos + yline) * 64))] == 1)
                         {
                             CPUC8->r_Registers[0xF] = 1;
                         }
-                        CPUC8->display[CPUC8->r_Registers[X] + xline + ((CPUC8->r_Registers[Y] + yline) * 64)] ^= 1;
+                        CPUC8->display[xpos + xline + ((ypos + yline) * 64)] ^= 1;
                     }
                 }
             }
@@ -281,13 +309,13 @@ void PerformOpcode( WORD opcode,
         switch (opcode & 0x00FF)
         {
         case 0x009E:
-            if(CPUC8->Key[X]){
+            if(CPUC8->Key[CPUC8->r_Registers[X]]){
                 CPUC8->PC = CPUC8->PC + 2;
             } 
             break;
             
         case 0x00A1:
-            if(CPUC8->Key[X]){
+            if(!CPUC8->Key[CPUC8->r_Registers[X]]){
                 CPUC8->PC = CPUC8->PC + 2;
             }
             break;
@@ -305,7 +333,20 @@ void PerformOpcode( WORD opcode,
             break;
         
         case 0x000A:
-            C8_waitInput(CPUC8);
+            bool key_pressed = false;
+
+            pcincf = 1;
+
+            for(int i = 0; i < 16; ++i)
+            {
+                if(CPUC8->Key[i] != 0)
+                {
+                    CPUC8->r_Registers[X] = i;
+
+                    pcincf = 0;
+                }
+            }
+            
             break;
         
         case 0x0015:
@@ -321,25 +362,27 @@ void PerformOpcode( WORD opcode,
             break;
 
         case 0x0029:
-            CPUC8->r_AddressI = (X * 5);
+            CPUC8->r_AddressI = (CPUC8->r_Registers[X] * 5);
             break;
 
         case 0x0033:
             CPUC8->m_Memory[CPUC8->r_AddressI] = (CPUC8->r_Registers[X]/100);
-            CPUC8->m_Memory[CPUC8->r_AddressI] = (CPUC8->r_Registers[X]/10)%10;
-            CPUC8->m_Memory[CPUC8->r_AddressI] = (CPUC8->r_Registers[X]%10);
+            CPUC8->m_Memory[(CPUC8->r_AddressI)+1] = (CPUC8->r_Registers[X]/10)%10;
+            CPUC8->m_Memory[(CPUC8->r_AddressI)+2] = (CPUC8->r_Registers[X]%10);
             break;
 
         case 0x0055:
-            for(int i = 0 ; i < 0x10; i++){
+            for(int i = 0 ; i < (X+1); i++){
                 CPUC8->m_Memory[(CPUC8->r_AddressI) + i] = CPUC8->r_Registers[i];
             }
+            CPUC8->r_AddressI = CPUC8->r_AddressI + X + 1;
             break;
 
         case 0x0065:
-            for(int i = 0 ; i < 0x10; i++){
+            for(int i = 0 ; i < (X+1); i++){
                 CPUC8->r_Registers[i] = CPUC8->m_Memory[(CPUC8->r_AddressI) + i];
             }
+            CPUC8->r_AddressI = CPUC8->r_AddressI + X + 1;
             break;
 
         default:
@@ -352,8 +395,10 @@ void PerformOpcode( WORD opcode,
         printf(" %X Invalid Opcode 4\n", opcode);
         break;
     }
+    if(!pcincf){
+        CPUC8->PC += 2;
+    }
 
-    CPUC8->PC += 2;
 }
 
 

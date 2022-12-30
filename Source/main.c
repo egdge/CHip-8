@@ -9,8 +9,8 @@
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 320;
 
-#define R_VALUE 0x00
-#define G_VALUE 0x2A
+#define R_VALUE 0xB3
+#define G_VALUE 0xF2
 #define B_VALUE 0xFF 
 
 //Print memory for debuging purposes
@@ -38,22 +38,20 @@ int main(int argc, char **argv){
         return 0;
     }
 
-    if(!init(&Main_Display, SCREEN_WIDTH, SCREEN_HEIGHT)){
+    if(!intidisplay(&Main_Display, SCREEN_WIDTH, SCREEN_HEIGHT)){
         return 0;
     }
 
     int cycles = 0;
 
     
-    while(1){
+    while(!Main_CPU.close){
 
         //Get Opcode
         opcode = getopcode(&Main_CPU);
-        printf("cycle: %d\nPC: %04X\ninstrustion: %04X\n",cycles, Main_CPU.PC, opcode);
-       
-        
+        //printf("cycle: %d\nPC: %04X\ninstrustion: %04X\n",cycles, Main_CPU.PC, opcode);
+
         PerformOpcode(opcode, &Main_CPU);
-        
 
         //Handle timers
         DealWithDelayTimer(&Main_CPU);
@@ -82,15 +80,13 @@ int main(int argc, char **argv){
         }
 
         //Handle Sound
-
         ++cycles;
-        SDL_Delay(1000);
+        C8_getInput(&Main_CPU);
 
     }
     
     
-
-    
+    shutdown(&Main_Display);
     
     return 0;
 }

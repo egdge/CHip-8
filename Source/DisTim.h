@@ -17,7 +17,7 @@ typedef struct {
 } C8_display;
 
 
-bool init(C8_display* display, int SCREEN_WIDTH, int SCREEN_HEIGHT);
+bool intidisplay(C8_display* display, int SCREEN_WIDTH, int SCREEN_HEIGHT);
 
 void ArrToSurface(CPU* cpu, C8_display* display);
 
@@ -28,6 +28,8 @@ bool update_screen(C8_display* display);
 void DealWithDelayTimer(CPU* cpu);
 
 void DealWithSoundTimer(CPU* cpu);
+
+void shutdown(C8_display* display);
 
 
 #endif
