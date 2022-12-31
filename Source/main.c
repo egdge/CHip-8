@@ -87,6 +87,7 @@ int main(int argc, char **argv){
     
     
     shutdown(&Main_Display);
+    SDL_Quit();
     
     return 0;
 }

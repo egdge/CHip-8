@@ -278,24 +278,24 @@ void PerformOpcode( WORD opcode,
         BYTE pixel;
         BYTE xpos;
         BYTE ypos;
-        if (CPUC8->r_Registers[X] > 63){xpos = CPUC8->r_Registers[X]%64;}
-        else {xpos = CPUC8->r_Registers[X];}
-        if (CPUC8->r_Registers[Y] > 31){ypos = CPUC8->r_Registers[Y]%32;}
-        else {ypos = CPUC8->r_Registers[Y];}
-
 
         for (int yline = 0; yline < height; yline++)
             {
                 pixel = CPUC8->m_Memory[(CPUC8->r_AddressI) + yline];
                 for(int xline = 0; xline < 8; xline++)
                 {   
+                    if ((CPUC8->r_Registers[X]+xline) > 63){xpos = (CPUC8->r_Registers[X]+xline)%64;}
+                    else {xpos = CPUC8->r_Registers[X]+xline;}
+                    
                     if((pixel & (0x80 >> xline)) != 0)
                     {
-                        if(CPUC8->display[(xpos + xline + ((ypos + yline) * 64))] == 1)
+                        if ((CPUC8->r_Registers[Y]+yline) > 31){ypos = (CPUC8->r_Registers[Y]+yline)%32;}
+                        else {ypos = (CPUC8->r_Registers[Y]+yline);}
+                        if(CPUC8->display[(xpos + ((ypos) * 64))] == 1)
                         {
                             CPUC8->r_Registers[0xF] = 1;
                         }
-                        CPUC8->display[xpos + xline + ((ypos + yline) * 64)] ^= 1;
+                        CPUC8->display[xpos + (ypos * 64)] ^= 1;
                     }
                 }
             }

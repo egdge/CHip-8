@@ -98,6 +98,5 @@ void shutdown(C8_display* display){
     SDL_DestroyTexture(display->tex);
     SDL_DestroyRenderer(display->ren);
     SDL_DestroyWindow(display->win);
-    SDL_Quit();
 }
 
